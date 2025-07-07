@@ -84,6 +84,8 @@ if table1_path or table2_path:
 
     # SQL for loading files
     query_prefix = ""
+    null_clause = ", nullstr=['NULL', '']"
+    
     if table1_path:
         if table1_path.endswith(".parquet"):
             query_prefix += f"CREATE OR REPLACE TABLE table1 AS SELECT * FROM parquet_scan('{table1_path}');\n"
@@ -91,7 +93,7 @@ if table1_path or table2_path:
             delim_clause = f", delim='{delimiter}'" if delimiter else ""
             query_prefix += f"""
             CREATE OR REPLACE TABLE table1 AS 
-            SELECT * FROM read_csv_auto('{table1_path}', encoding='{table1_encoding}'{delim_clause});
+            SELECT * FROM read_csv_auto('{table1_path}', encoding='{table1_encoding}'{delim_clause}{null_clause});
             """
 
     if table2_path:
@@ -101,7 +103,7 @@ if table1_path or table2_path:
             delim_clause = f", delim='{delimiter}'" if delimiter else ""
             query_prefix += f"""
             CREATE OR REPLACE TABLE table2 AS 
-            SELECT * FROM read_csv_auto('{table2_path}', encoding='{table2_encoding}'{delim_clause});
+            SELECT * FROM read_csv_auto('{table2_path}', encoding='{table2_encoding}'{delim_clause}{null_clause});
             """
 
     user_query = st.text_area("Write your SQL query below", value="SELECT * FROM table1 LIMIT 100", height=120)
