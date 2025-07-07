@@ -2,6 +2,7 @@ import streamlit as st
 import duckdb
 import os
 import chardet
+import tempfile
 
 st.set_page_config(layout="wide")
 st.title("🚀 High-Performance SQL on Large Files with DuckDB")
@@ -35,10 +36,10 @@ con = duckdb.connect()
 
 # 🧠 Save uploaded file to disk (temp)
 def save_to_disk(uploaded_file):
-    file_path = os.path.join("/tmp", uploaded_file.name)
-    with open(file_path, "wb") as f:
-        f.write(uploaded_file.read())
-    return file_path
+    suffix = os.path.splitext(uploaded_file.name)[1]
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, mode='wb') as tmp:
+        tmp.write(uploaded_file.read())
+        return tmp.name
 
 # 🧠 Detect encoding
 def detect_encoding(uploaded_file):
