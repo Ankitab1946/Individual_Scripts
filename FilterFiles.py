@@ -1,48 +1,18 @@
 import streamlit as st
-import pandas as pd
 import duckdb
 import os
 import chardet
 
 st.set_page_config(layout="wide")
-st.title("🧠 SQL Query on Uploaded File(s) with Join Support & Large File Handling")
+st.title("🚀 High-Performance SQL on Large Files with DuckDB")
 
-# 🔍 Detect file encoding
-def detect_encoding(uploaded_file):
-    raw_data = uploaded_file.read()
-    result = chardet.detect(raw_data)
-    uploaded_file.seek(0)
-    return result['encoding']
-
-# 🧠 Read uploaded file with delimiter and encoding
-def read_file(uploaded_file, sep=None):
-    filename = uploaded_file.name
-    ext = os.path.splitext(filename)[1].lower()
-    try:
-        encoding = detect_encoding(uploaded_file)
-        st.sidebar.write(f"📄 `{filename}` detected encoding: `{encoding}`")
-
-        if ext in [".csv", ".dat", ".icr"]:
-            df = pd.read_csv(uploaded_file, sep=sep, engine="python", encoding=encoding, on_bad_lines="warn")
-        elif ext == ".json":
-            df = pd.read_json(uploaded_file)
-        elif ext == ".parquet":
-            df = pd.read_parquet(uploaded_file)
-        else:
-            st.error(f"Unsupported file type: {ext}")
-            return None
-    except Exception as e:
-        st.error(f"❌ Error reading file `{filename}`: {e}")
-        return None
-
-    return df
-
-# 📦 UI: Delimiter selection
+# 📦 Delimiter input
 st.sidebar.markdown("### 🔧 Delimiter Options")
 delimiter_option = st.sidebar.selectbox(
     "Select Delimiter",
     ["Auto-detect", "Comma (,)", "Tab (\\t)", "Pipe (|)", "Semicolon (;)", "Space", "Custom"]
 )
+
 delimiter_map = {
     "Auto-detect": None,
     "Comma (,)": ",",
@@ -58,49 +28,73 @@ if delimiter_option == "Custom":
 
 # 📁 Upload files
 st.markdown("### 📁 Upload One or Two Files")
-file1 = st.file_uploader("Upload File 1", type=["csv", "dat", "json", "parquet", "icr"], key="file1")
-file2 = st.file_uploader("Upload File 2 (Optional)", type=["csv", "dat", "json", "parquet", "icr"], key="file2")
+file1 = st.file_uploader("Upload File 1", type=["csv", "dat", "parquet"], key="file1")
+file2 = st.file_uploader("Upload File 2 (Optional)", type=["csv", "dat", "parquet"], key="file2")
 
-df1 = df2 = None
+con = duckdb.connect()
+
+# 🧠 Save uploaded file to disk (temp)
+def save_to_disk(uploaded_file):
+    file_path = os.path.join("/tmp", uploaded_file.name)
+    with open(file_path, "wb") as f:
+        f.write(uploaded_file.read())
+    return file_path
+
+# 🧠 Detect encoding
+def detect_encoding(uploaded_file):
+    raw_data = uploaded_file.read()
+    result = chardet.detect(raw_data)
+    uploaded_file.seek(0)
+    return result['encoding']
+
+table1_path = table2_path = None
+
 if file1:
-    df1 = read_file(file1, sep=delimiter)
-    if df1 is not None:
-        st.success("✅ File 1 loaded as `table1`")
-        st.subheader("📄 Preview of File 1 (first 100 rows)")
-        st.dataframe(df1.head(100), use_container_width=True)
+    table1_path = save_to_disk(file1)
+    st.success(f"✅ File 1 loaded as `table1`")
+    st.text(f"Path: {table1_path}")
 
 if file2:
-    df2 = read_file(file2, sep=delimiter)
-    if df2 is not None:
-        st.success("✅ File 2 loaded as `table2`")
-        st.subheader("📄 Preview of File 2 (first 100 rows)")
-        st.dataframe(df2.head(100), use_container_width=True)
+    table2_path = save_to_disk(file2)
+    st.success(f"✅ File 2 loaded as `table2`")
+    st.text(f"Path: {table2_path}")
 
-# 🔍 SQL Section
-if df1 is not None or df2 is not None:
+# 👇 SQL Section
+if table1_path or table2_path:
     st.subheader("📝 SQL Query Interface")
     st.markdown("""
-    - Use `table1` and `table2` in your SQL.
-    - Examples:
-        - `SELECT * FROM table1 LIMIT 5`
-        - `SELECT * FROM table1 JOIN table2 ON table1.id = table2.id`
-        - `SELECT department, COUNT(*) FROM table1 GROUP BY department`
+    Use `table1` and `table2` in SQL. Example:
+    ```sql
+    SELECT * FROM table1 LIMIT 100
+    ```
     """)
 
-    default_query = "SELECT * FROM table1 LIMIT 10" if df1 is not None else "SELECT * FROM table2 LIMIT 10"
-    query = st.text_area("Write your SQL query below:", value=default_query, height=100)
+    # Auto SQL setup using DuckDB's read_csv/read_parquet
+    query_prefix = ""
+    if table1_path:
+        if table1_path.endswith(".parquet"):
+            query_prefix += f"CREATE OR REPLACE TABLE table1 AS SELECT * FROM parquet_scan('{table1_path}');\n"
+        else:
+            delim_clause = f", delim='{delimiter}'" if delimiter else ""
+            encoding = detect_encoding(file1)
+            query_prefix += f"CREATE OR REPLACE TABLE table1 AS SELECT * FROM read_csv_auto('{table1_path}', encoding='{encoding}'{delim_clause});\n"
+
+    if table2_path:
+        if table2_path.endswith(".parquet"):
+            query_prefix += f"CREATE OR REPLACE TABLE table2 AS SELECT * FROM parquet_scan('{table2_path}');\n"
+        else:
+            delim_clause = f", delim='{delimiter}'" if delimiter else ""
+            encoding = detect_encoding(file2)
+            query_prefix += f"CREATE OR REPLACE TABLE table2 AS SELECT * FROM read_csv_auto('{table2_path}', encoding='{encoding}'{delim_clause});\n"
+
+    user_query = st.text_area("Enter SQL query below", value="SELECT * FROM table1 LIMIT 100", height=120)
 
     if st.button("Run SQL Query"):
         try:
-            con = duckdb.connect()
-            if df1 is not None:
-                con.register("table1", df1)
-            if df2 is not None:
-                con.register("table2", df2)
-
-            result = con.execute(query).df()
+            full_query = query_prefix + "\n" + user_query
+            result = con.execute(full_query).df()
             st.success("✅ Query executed successfully!")
-            st.dataframe(result.head(1000), use_container_width=True)  # Limit large output
+            st.dataframe(result.head(1000), use_container_width=True)
         except Exception as e:
             st.error(f"❌ SQL Error: {e}")
 else:
