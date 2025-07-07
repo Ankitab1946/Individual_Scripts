@@ -10,7 +10,6 @@ st.title("🚀 High-Performance SQL on Large Files with DuckDB")
 
 # ---------------------- SIDEBAR CONTROLS ----------------------
 
-# 📦 Delimiter for input
 st.sidebar.markdown("### 🔧 Input File Delimiter")
 delimiter_option = st.sidebar.selectbox(
     "Select Delimiter for Input File",
@@ -31,7 +30,6 @@ if delimiter_option == "Custom":
 
 # ---------------------- FILE HANDLING ----------------------
 
-# 🔍 Detect encoding
 def detect_encoding(uploaded_file):
     raw_data = uploaded_file.read(100000)
     result = chardet.detect(raw_data)
@@ -41,7 +39,6 @@ def detect_encoding(uploaded_file):
         encoding = "utf-8"
     return encoding
 
-# 💾 Save uploaded file to disk
 def save_to_disk(uploaded_file):
     suffix = os.path.splitext(uploaded_file.name)[1]
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, mode="wb") as tmp:
@@ -82,10 +79,9 @@ if table1_path or table2_path:
     - `SELECT * FROM table1 JOIN table2 ON table1.id = table2.id`
     """)
 
-    # SQL for loading files
     query_prefix = ""
     null_clause = ", nullstr=['NULL', '']"
-    
+
     if table1_path:
         if table1_path.endswith(".parquet"):
             query_prefix += f"CREATE OR REPLACE TABLE table1 AS SELECT * FROM parquet_scan('{table1_path}');\n"
@@ -112,34 +108,38 @@ if table1_path or table2_path:
         try:
             full_query = query_prefix + "\n" + user_query
             result = con.execute(full_query).df()
+            st.session_state["query_result"] = result  # ✅ Cache result
             st.success("✅ Query executed successfully!")
             st.dataframe(result.head(1000), use_container_width=True)
-
-            # ---------------------- DOWNLOAD BLOCK ----------------------
-            st.markdown("### 📥 Download SQL Result")
-
-            sep_option = st.selectbox("Select download delimiter", ["Comma (,)", "Tab (\\t)", "Pipe (|)", "Semicolon (;)"])
-            sep_map = {
-                "Comma (,)": ",",
-                "Tab (\\t)": "\t",
-                "Pipe (|)": "|",
-                "Semicolon (;)": ";"
-            }
-            download_sep = sep_map.get(sep_option, ",")
-
-            csv_buffer = io.StringIO()
-            result.to_csv(csv_buffer, sep=download_sep, index=False)
-            csv_bytes = csv_buffer.getvalue().encode("utf-8")
-
-            st.download_button(
-                label="⬇️ Download Result as CSV",
-                data=csv_bytes,
-                file_name="query_result.csv",
-                mime="text/csv"
-            )
-
         except Exception as e:
             st.error(f"❌ SQL Error: {e}")
+
+    # ---------------------- DOWNLOAD BLOCK ----------------------
+    st.markdown("### 📥 Download SQL Result")
+
+    sep_option = st.selectbox("Select download delimiter", ["Comma (,)", "Tab (\\t)", "Pipe (|)", "Semicolon (;)"])
+    sep_map = {
+        "Comma (,)": ",",
+        "Tab (\\t)": "\t",
+        "Pipe (|)": "|",
+        "Semicolon (;)": ";"
+    }
+    download_sep = sep_map.get(sep_option, ",")
+
+    if "query_result" in st.session_state:
+        result = st.session_state["query_result"]
+        csv_buffer = io.StringIO()
+        result.to_csv(csv_buffer, sep=download_sep, index=False)
+        csv_bytes = csv_buffer.getvalue().encode("utf-8")
+
+        st.download_button(
+            label="⬇️ Download Result as CSV",
+            data=csv_bytes,
+            file_name="query_result.csv",
+            mime="text/csv"
+        )
+    else:
+        st.info("💡 Run a SQL query first to enable download.")
 
 else:
     st.warning("👆 Upload at least one file to begin.")
