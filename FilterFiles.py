@@ -81,6 +81,7 @@ if table1_path or table2_path:
 
     query_prefix = ""
     null_clause = ", nullstr=['NULL', '']"
+    all_varchar_clause = ", all_varchar=true"
 
     if table1_path:
         if table1_path.endswith(".parquet"):
@@ -89,7 +90,7 @@ if table1_path or table2_path:
             delim_clause = f", delim='{delimiter}'" if delimiter else ""
             query_prefix += f"""
             CREATE OR REPLACE TABLE table1 AS 
-            SELECT * FROM read_csv_auto('{table1_path}', encoding='{table1_encoding}'{delim_clause}{null_clause});
+            SELECT * FROM read_csv('{table1_path}', AUTO_DETECT=TRUE, encoding='{table1_encoding}'{delim_clause}{null_clause}{all_varchar_clause});
             """
 
     if table2_path:
@@ -99,7 +100,7 @@ if table1_path or table2_path:
             delim_clause = f", delim='{delimiter}'" if delimiter else ""
             query_prefix += f"""
             CREATE OR REPLACE TABLE table2 AS 
-            SELECT * FROM read_csv_auto('{table2_path}', encoding='{table2_encoding}'{delim_clause}{null_clause});
+            SELECT * FROM read_csv('{table2_path}', AUTO_DETECT=TRUE, encoding='{table2_encoding}'{delim_clause}{null_clause}{all_varchar_clause});
             """
 
     user_query = st.text_area("Write your SQL query below", value="SELECT * FROM table1 LIMIT 100", height=120)
@@ -108,7 +109,7 @@ if table1_path or table2_path:
         try:
             full_query = query_prefix + "\n" + user_query
             result = con.execute(full_query).df()
-            st.session_state["query_result"] = result  # ✅ Cache result
+            st.session_state["query_result"] = result
             st.success("✅ Query executed successfully!")
             st.dataframe(result.head(1000), use_container_width=True)
         except Exception as e:
