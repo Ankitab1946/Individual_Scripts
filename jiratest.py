@@ -66,38 +66,40 @@ def generate_sprint_report(sprint_data):
 #     plt.title("Velocity Chart")
 #     plt.legend()
 #     st.pyplot(plt)
-# def plot_velocity_chart(sprint_reports):
-#     sprint_names = [r['sprint_name'] for r in sprint_reports]
-#     committed = [r['committed'] for r in sprint_reports]
-#     delivered = [r['delivered'] for r in sprint_reports]
 
-#     fig = go.Figure()
+def plot_velocity_chart(sprint_reports):
+    sprint_names = [r['sprint_name'] for r in sprint_reports]
+    committed = [r['committed'] for r in sprint_reports]
+    delivered = [r['delivered'] for r in sprint_reports]
 
-#     fig.add_trace(go.Bar(
-#         x=sprint_names,
-#         y=committed,
-#         name='Committed',
-#         marker_color='lightblue',
-#         hovertemplate='Sprint: %{x}<br>Committed: %{y}<extra></extra>'
-#     ))
+    fig = go.Figure()
 
-#     fig.add_trace(go.Bar(
-#         x=sprint_names,
-#         y=delivered,
-#         name='Delivered',
-#         marker_color='green',
-#         hovertemplate='Sprint: %{x}<br>Delivered: %{y}<extra></extra>'
-#     ))
+    fig.add_trace(go.Bar(
+        x=sprint_names,
+        y=committed,
+        name='Committed',
+        marker_color='lightblue',
+        hovertemplate='Sprint: %{x}<br>Committed: %{y}<extra></extra>'
+    ))
 
-#     fig.update_layout(
-#         title="Velocity Chart",
-#         xaxis_title="Sprint",
-#         yaxis_title="Story Points",
-#         barmode='group',
-#         hovermode='x unified'
-#     )
+    fig.add_trace(go.Bar(
+        x=sprint_names,
+        y=delivered,
+        name='Delivered',
+        marker_color='green',
+        hovertemplate='Sprint: %{x}<br>Delivered: %{y}<extra></extra>'
+    ))
 
-#     st.plotly_chart(fig, use_container_width=True)
+    fig.update_layout(
+        title="Velocity Chart",
+        xaxis_title="Sprint",
+        yaxis_title="Story Points",
+        barmode='group',
+        hovermode='x unified'
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+    
 def plot_combined_chart(sprint_reports):
     sprint_names = [r['sprint_name'] for r in sprint_reports]
     committed = [r['committed'] for r in sprint_reports]
