@@ -260,5 +260,58 @@ def main():
             st.dataframe(summary_df)
             st.markdown(to_csv_download_link(summary_df, "Summary_Report.csv"), unsafe_allow_html=True)
 
+            ##########################################################################
+
+            editable_data = []
+
+            for r in sprint_reports:
+                editable_data.append({
+                    'Sprint': r['sprint_name'],
+                    'Committed': r['committed'],
+                    'Delivered': r['delivered'],
+                    'Say-Do Ratio': round(r['delivered'] / r['committed'], 2) if r['committed'] else 0,
+                    'Correction Comment': ''
+                })
+            
+            editable_df = pd.DataFrame(editable_data)
+            
+            st.subheader("✏️ Edit Committed/Delivered Story Points (Optional)")
+            edited_df = st.data_editor(
+                editable_df,
+                num_rows="fixed",
+                use_container_width=True,
+                key="editable_summary"
+            )
+            
+            if st.button("✅ Submit Corrections and Regenerate Charts"):
+                updated_sprint_reports = []
+            
+                for i, row in edited_df.iterrows():
+                    updated_sprint_reports.append({
+                        'sprint_name': row['Sprint'],
+                        'committed': row['Committed'],
+                        'delivered': row['Delivered'],
+                        'issues': []  # You can retain original issues or clear
+                    })
+            
+                    # Optional: save audit log
+                    comment = row['Correction Comment']
+                    if comment:
+                        with open("correction_log.txt", "a") as log_file:
+                            log_file.write(f"{row['Sprint']} | C: {row['Committed']} | D: {row['Delivered']} | Comment: {comment}\n")
+            
+                # Regenerate Charts
+                st.success("Corrections applied. Regenerating charts...")
+            
+                st.subheader("📈 Velocity Chart (Corrected)")
+                plot_velocity_chart(updated_sprint_reports)
+            
+                st.subheader("📈 Sprint Statistics (Corrected)")
+                plot_combined_chart(updated_sprint_reports)
+            
+                st.subheader("📉 Say-Do Ratio (Corrected)")
+                generate_say_do_chart(updated_sprint_reports)
+
+
 if __name__ == "__main__":
     main()
