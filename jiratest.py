@@ -3,32 +3,34 @@ import pandas as pd
 import requests
 import base64
 import plotly.graph_objects as go
+import urllib3
+
+# Disable SSL warnings (only if using self-signed certs)
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # -----------------------
 # Jira Configuration
 # -----------------------
-JIRA_BASE_URL = "https://your-domain.atlassian.net"
-JIRA_USERNAME = "your-username"
-JIRA_PASSWORD = "your-password-or-api-token"
-STORY_POINT_FIELD = "customfield_10016"  # update if different
+JIRA_BASE_URL = "https://your-domain.atlassian.net"  # ✅ UPDATE THIS
+JIRA_USERNAME = "your-username"                      # ✅ UPDATE THIS
+JIRA_PASSWORD = "your-password-or-api-token"         # ✅ UPDATE THIS
+STORY_POINT_FIELD = "customfield_10016"              # ✅ Update if different in your Jira
 
 # -----------------------
-# Authentication
+# Auth & Helper
 # -----------------------
 def get_auth_header():
-    auth = f"{JIRA_USERNAME}:{JIRA_PASSWORD}"
-    b64_auth = base64.b64encode(auth.encode()).decode()
-    return {"Authorization": f"Basic {b64_auth}", "Accept": "application/json"}
+    token = base64.b64encode(f"{JIRA_USERNAME}:{JIRA_PASSWORD}".encode()).decode()
+    return {"Authorization": f"Basic {token}", "Accept": "application/json"}
 
 def jira_get(url):
     headers = get_auth_header()
-    full_url = f"{JIRA_BASE_URL}{url}"
-    response = requests.get(full_url, headers=headers, verify=False)  # allow self-signed certs
+    response = requests.get(f"{JIRA_BASE_URL}{url}", headers=headers, verify=False)
     response.raise_for_status()
     return response.json()
 
 # -----------------------
-# Jira Data Fetching
+# Jira Fetch Functions
 # -----------------------
 def get_all_boards():
     boards = []
@@ -36,7 +38,7 @@ def get_all_boards():
     while True:
         data = jira_get(f"/rest/agile/1.0/board?startAt={start_at}&maxResults=50")
         boards += data.get("values", [])
-        if data["isLast"]:
+        if data.get("isLast", True):
             break
         start_at += 50
     return boards
@@ -64,7 +66,7 @@ def get_issues_in_sprint(sprint_id):
     return issues
 
 # -----------------------
-# Reporting and Charts
+# Reporting & Charts
 # -----------------------
 def generate_sprint_report(issue_rows):
     return pd.DataFrame(issue_rows)
@@ -84,7 +86,7 @@ def plot_velocity_chart(sprint_reports):
                          hovertemplate='Sprint: %{x}<br>Rejected: %{y}<extra></extra>'))
 
     fig.update_layout(
-        title="Velocity Chart with Completed and Rejected",
+        title="Velocity Chart (Committed, Completed, Rejected)",
         barmode='group',
         xaxis_title="Sprint",
         yaxis_title="Story Points",
@@ -98,32 +100,44 @@ def to_csv_download_link(df, filename):
     return f'<a href="data:file/csv;base64,{b64}" download="{filename}">📥 Download {filename}</a>'
 
 # -----------------------
-# Streamlit UI
+# Main App
 # -----------------------
 def main():
-    st.title("📊 Jira Multi-Project Sprint Report")
+    st.title("📊 Jira Multi-Project Sprint Report Generator")
 
+    # Fetch all boards and projects
     all_boards = get_all_boards()
-    project_keys = sorted(list({board['location']['projectKey'] for board in all_boards}))
+    project_keys = sorted(list({
+        board.get('location', {}).get('projectKey')
+        for board in all_boards
+        if board.get('location', {}).get('projectKey')
+    }))
 
     selected_projects = st.multiselect("Select Project(s):", project_keys)
 
     if selected_projects:
-        filtered_boards = [b for b in all_boards if b['location']['projectKey'] in selected_projects]
-        board_map = {f"{b['location']['projectKey']} - {b['name']}": b['id'] for b in filtered_boards}
+        filtered_boards = [
+            b for b in all_boards
+            if b.get('location', {}).get('projectKey') in selected_projects
+        ]
+        board_map = {
+            f"{b.get('location', {}).get('projectKey')} - {b['name']}": b['id']
+            for b in filtered_boards
+        }
         selected_boards = st.multiselect("Select Board(s):", list(board_map.keys()))
 
         if selected_boards:
             all_sprints = []
-            for bname in selected_boards:
-                bid = board_map[bname]
-                all_sprints += get_sprints(bid)
+            for board_name in selected_boards:
+                board_id = board_map[board_name]
+                all_sprints += get_sprints(board_id)
 
             sprint_map = {s['name']: s['id'] for s in all_sprints}
             selected_sprints = st.multiselect("Select Sprint(s):", list(sprint_map.keys()))
 
             if selected_sprints:
                 sprint_reports = []
+
                 for sprint_name in selected_sprints:
                     sprint_id = sprint_map[sprint_name]
                     issues = get_issues_in_sprint(sprint_id)
@@ -158,18 +172,18 @@ def main():
                         'issues': issue_rows
                     })
 
-                    # Table
+                    # Issue Table
                     st.subheader(f"📋 Sprint Report: {sprint_name}")
                     df = generate_sprint_report(issue_rows)
                     st.dataframe(df)
                     st.markdown(to_csv_download_link(df, f"{sprint_name}_report.csv"), unsafe_allow_html=True)
 
-                # Charts
+                # Velocity Chart
                 st.subheader("📈 Velocity Chart")
                 plot_velocity_chart(sprint_reports)
 
-                # Say-Do Summary
-                st.subheader("📊 Summary Table")
+                # Say-Do Summary Table
+                st.subheader("📊 Say-Do Summary")
                 summary_df = pd.DataFrame([{
                     'Sprint': r['sprint_name'],
                     'Committed': r['committed'],
@@ -177,9 +191,8 @@ def main():
                     'Rejected': r['rejected'],
                     'Say-Do Ratio': round(r['completed'] / r['committed'], 2) if r['committed'] else 0
                 } for r in sprint_reports])
-
                 st.dataframe(summary_df)
-                st.markdown(to_csv_download_link(summary_df, "Sprint_Summary_Report.csv"), unsafe_allow_html=True)
+                st.markdown(to_csv_download_link(summary_df, "Summary_Report.csv"), unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
