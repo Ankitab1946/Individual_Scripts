@@ -10,8 +10,15 @@ import plotly.graph_objects as go
 # -----------------------
 
 JIRA_BASE_URL = "https://your-domain.atlassian.net"  # Update this to your Jira base URL
-JIRA_USERNAME = "your-username-or-email"             # Update this
-JIRA_PASSWORD = "your-password-or-api-token"         # Use API token if you're using Jira Cloud
+# JIRA_USERNAME = "your-username-or-email"             # Update this
+# JIRA_PASSWORD = "your-password-or-api-token"         # Use API token if you're using Jira Cloud
+
+JIRA_USERNAME = st.sidebar.text_input("Jira Username/Email", type="default")
+JIRA_PASSWORD = st.sidebar.text_input("Jira API Token/Password", type="password")
+
+if not JIRA_USERNAME or not JIRA_PASSWORD:
+    st.warning("Enter Jira credentials to proceed.")
+    st.stop()
 
 # Custom field ID for story points (update this if yours is different)
 STORY_POINT_FIELD = "customfield_10016"
